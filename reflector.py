@@ -75,22 +75,39 @@ def show_typing_splash(root, text, delay=150):
 def main_app(auto_scan_dir=None):
     app = tk.Tk()
     app.title("Reflector Antivirus")
-    app.attributes("-fullscreen",True)
+    # Remove fullscreen for custom window controls
+    # app.attributes("-fullscreen",True)
+    app.geometry("800x500")  # or any preferred size
     app.config(bg='lightblue')
+
+    # Custom Window Control Buttons
+    controls_frame = tk.Frame(app, bg='lightblue')
+    controls_frame.pack(anchor='ne', padx=10, pady=5)
+
+    min_btn = tk.Button(controls_frame, text='–', width=3, command=app.iconify)
+    min_btn.pack(side='left', padx=2)
+
+    def maximize_restore():
+        if app.state() == 'zoomed':
+            app.state('normal')
+        else:
+            app.state('zoomed')
+
+    max_btn = tk.Button(controls_frame, text='⬜', width=3, command=maximize_restore)
+    max_btn.pack(side='left', padx=2)
+
+    close_btn = tk.Button(controls_frame, text='✕', width=3, command=app.destroy, fg='red')
+    close_btn.pack(side='left', padx=2)
 
     tk.Label(app, text="jonathan Antivirus app", font=("Arial", 24), bg='lightblue').pack(pady=20)
 
     scan_btn = tk.Button(app, text="Browse and Scan", command=lambda: browse_and_scan())
     scan_btn.pack(pady=10)
 
-
-    exit_btn = tk.Button(app, text="Exit",
-    command = app.destroy)
+    exit_btn = tk.Button(app, text="Exit", command=app.destroy)
     exit_btn.pack(pady=10)
     
-    # If auto_scan_dir is given, start scanning automatically after window appears
     if auto_scan_dir:
-        # Wait 500 ms to let window fully appear then start scan
         app.after(500, lambda: browse_and_scan(auto_scan_dir))
 
     app.mainloop()
