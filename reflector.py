@@ -1,7 +1,7 @@
 import os
 import hashlib
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk, ImageDraw
 
 def create_antivirus_icon():
@@ -34,21 +34,35 @@ def compute_md5(file_path):
         print(f"Error reading {file_path}: {e}")
         return None
 
-def scan_directory(directory):
-    infected_files = []
+def scan_directory_with_progress(directory, progress_var, progress_bar, status_label, app):
+    files_list = []
     for root_dir, _, files in os.walk(directory):
         for name in files:
-            file_path = os.path.join(root_dir, name)
-            file_hash = compute_md5(file_path)
-            if file_hash in malware_hashes:
-                infected_files.append(file_path)
+            files_list.append(os.path.join(root_dir, name))
+    total_files = len(files_list)
+    infected_files = []
+    for idx, file_path in enumerate(files_list):
+        file_hash = compute_md5(file_path)
+        if file_hash in malware_hashes:
+            infected_files.append(file_path)
+        # Update progress bar
+        progress = int(((idx + 1) / total_files) * 100)
+        progress_var.set(progress)
+        status_label.config(text=f"Scanning: {os.path.basename(file_path)}")
+        app.update_idletasks()
     return infected_files
 
-def browse_and_scan(auto_dir=None):
-    # If auto_dir provided, scan it automatically, else ask user
-    folder_path = auto_dir if auto_dir else filedialog.askdirectory()
+def browse_and_scan_with_progress(app, progress_var, progress_bar, status_label):
+    folder_path = filedialog.askdirectory()
     if folder_path:
-        infected = scan_directory(folder_path)
+        progress_var.set(0)
+        progress_bar.pack()
+        status_label.config(text="Starting scan...")
+        app.update_idletasks()
+        infected = scan_directory_with_progress(folder_path, progress_var, progress_bar, status_label, app)
+        progress_var.set(100)
+        status_label.config(text="Scan complete.")
+        progress_bar.pack_forget()
         if infected:
             messagebox.showwarning("Threat Detected!", f"Infected files:\n\n" + "\n".join(infected))
         else:
@@ -75,12 +89,10 @@ def show_typing_splash(root, text, delay=150):
 def main_app(auto_scan_dir=None):
     app = tk.Tk()
     app.title("Reflector Antivirus")
-    # Remove fullscreen for custom window controls
-    # app.attributes("-fullscreen",True)
-    app.geometry("800x500")  # or any preferred size
+    app.geometry("800x500")
     app.config(bg='lightblue')
 
-    # Custom Window Control Buttons
+    # --- Custom Window Controls ---
     controls_frame = tk.Frame(app, bg='lightblue')
     controls_frame.pack(anchor='ne', padx=10, pady=5)
 
@@ -92,7 +104,6 @@ def main_app(auto_scan_dir=None):
             app.state('normal')
         else:
             app.state('zoomed')
-
     max_btn = tk.Button(controls_frame, text='⬜', width=3, command=maximize_restore)
     max_btn.pack(side='left', padx=2)
 
@@ -101,17 +112,43 @@ def main_app(auto_scan_dir=None):
 
     tk.Label(app, text="jonathan Antivirus app", font=("Arial", 24), bg='lightblue').pack(pady=20)
 
-    scan_btn = tk.Button(app, text="Browse and Scan", command=lambda: browse_and_scan())
+    # --- Progress Bar and Status ---
+    progress_var = tk.IntVar()
+    progress_bar = ttk.Progressbar(app, variable=progress_var, maximum=100, length=350)
+    progress_bar.pack(pady=10)
+    progress_bar.pack_forget()  # Hide initially
+
+    status_label = tk.Label(app, text="", font=("Arial", 12), bg='lightblue')
+    status_label.pack()
+
+    scan_btn = tk.Button(
+        app, text="Browse and Scan",
+        command=lambda: browse_and_scan_with_progress(app, progress_var, progress_bar, status_label)
+    )
     scan_btn.pack(pady=10)
 
     exit_btn = tk.Button(app, text="Exit", command=app.destroy)
     exit_btn.pack(pady=10)
-    
+
     if auto_scan_dir:
-        app.after(500, lambda: browse_and_scan(auto_scan_dir))
+        def auto_scan():
+            progress_var.set(0)
+            progress_bar.pack()
+            status_label.config(text="Starting scan...")
+            app.update_idletasks()
+            infected = scan_directory_with_progress(auto_scan_dir, progress_var, progress_bar, status_label, app)
+            progress_var.set(100)
+            status_label.config(text="Scan complete.")
+            progress_bar.pack_forget()
+            if infected:
+                messagebox.showwarning("Threat Detected!", f"Infected files:\n\n" + "\n".join(infected))
+            else:
+                messagebox.showinfo("Scan Complete", "No threats found.")
+        app.after(500, auto_scan)
 
     app.mainloop()
 
+# --- Main Run ---
 create_antivirus_icon()
 
 root = tk.Tk()
@@ -120,7 +157,7 @@ root.withdraw()
 # Show splash typing animation
 show_typing_splash(root, "reflector Antivirus ")
 
-# After splash typing finishes (~delay * length + hold), start main app and scan
+# After splash typing finishes, start main app and scan
 total_time = 150 * len("reflector Antivirus ") + 1000 + 100
 
 # Put here the folder you want to scan automatically on start (change this path as you want)
@@ -129,4 +166,3 @@ default_scan_folder = os.path.expanduser("~")  # example: user's home folder
 root.after(total_time, lambda: (root.destroy(), main_app(default_scan_folder)))
 
 root.mainloop()
-
