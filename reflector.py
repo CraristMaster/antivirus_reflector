@@ -96,19 +96,7 @@ def main_app(auto_scan_dir=None):
     controls_frame = tk.Frame(app, bg='lightblue')
     controls_frame.pack(anchor='ne', padx=10, pady=5)
 
-    min_btn = tk.Button(controls_frame, text='–', width=3, command=app.iconify)
-    min_btn.pack(side='left', padx=2)
-
-    def maximize_restore():
-        if app.state() == 'zoomed':
-            app.state('normal')
-        else:
-            app.state('zoomed')
-    max_btn = tk.Button(controls_frame, text='⬜', width=3, command=maximize_restore)
-    max_btn.pack(side='left', padx=2)
-
-    close_btn = tk.Button(controls_frame, text='✕', width=3, command=app.destroy, fg='red')
-    close_btn.pack(side='left', padx=2)
+ 
 
     tk.Label(app, text="jonathan Antivirus app", font=("Arial", 24), bg='lightblue').pack(pady=20)
 
