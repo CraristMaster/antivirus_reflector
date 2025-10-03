@@ -8,6 +8,18 @@ import queue
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
+# ---------------- Malware Database (SIMULATED PLACEHOLDERS) ----------------
+# NOTE: Real malware hashes/extensions are omitted for safety.
+# A real AV would load these from a comprehensive, updatable database.
+MALWARE_HASHES = {
+    # 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855': 'Troj_EmptyFile.A',
+}
+
+MALWARE_EXTENSIONS = [
+    # '.exe', '.dll', '.scr', '.vbs', '.js', # Common executable/script extensions
+    # '.ransom', '.encrypted', # Example ransom-specific extensions
+]
+
 # ---------------- Theme & Utilities ----------------
 def modern_theme():
     return {
@@ -58,8 +70,8 @@ class NeonProgressRing(tk.Canvas):
                          outline="#11141a", width=self.thickness, tags="bgcircle")
         # center static percent placeholder
         self.text_id = self.create_text(self.size // 2, self.size // 2,
-                                        text="Idle", fill=self.theme["muted"],
-                                        font=("Segoe UI", 14, "bold"))
+                                         text="Idle", fill=self.theme["muted"],
+                                         font=("Segoe UI", 14, "bold"))
         if self.subtext_id:
             self.delete(self.subtext_id)
         self.subtext_id = self.create_text(self.size // 2, self.size // 2 + 36,
@@ -128,8 +140,8 @@ class NeonProgressRing(tk.Canvas):
         if self.text_id:
             self.delete(self.text_id)
         self.text_id = self.create_text(self.size // 2, self.size // 2,
-                                        text=f"{percent:.0f}%", fill=self.theme["fg"],
-                                        font=("Segoe UI", 22, "bold"))
+                                         text=f"{percent:.0f}%", fill=self.theme["fg"],
+                                         font=("Segoe UI", 22, "bold"))
         # subtext
         if self.subtext_id:
             self.delete(self.subtext_id)
@@ -173,18 +185,29 @@ class USBMonitor(threading.Thread):
     def run(self):
         if not self.psutil:
             return
-        existing = {p.device for p in self.psutil.disk_partitions() if "removable" in p.opts}
+        # Use a list comprehension to avoid iterating over a generator multiple times
+        try:
+            existing = {p.device for p in self.psutil.disk_partitions(all=False) if "removable" in p.opts}
+        except Exception:
+            existing = set()
+            
         while self._running:
             try:
-                new = {p.device for p in self.psutil.disk_partitions() if "removable" in p.opts}
-                added = new - existing
+                # Refresh partitions list inside the loop
+                current = {p.device for p in self.psutil.disk_partitions(all=False) if "removable" in p.opts}
+                added = current - existing
+                
                 if added:
                     for d in added:
                         self.app.log_message(f"USB plugged: {d}")
-                        # Do not auto-scan - just notify
-                existing = new
-            except Exception:
-                pass
+                        # Notifying the app to update status or perform a quick scan (simulated)
+                        # self.app.quick_scan_device(d) # Hook for real action
+                
+                existing = current
+            except Exception as e:
+                # Log any exception during monitoring (e.g., if a partition is unstable)
+                self.app.log_message(f"USB Monitor Error: {e}")
+            
             time.sleep(2)
 
     def stop(self):
@@ -217,7 +240,12 @@ class AntivirusApp(tk.Tk):
 
     def _build_styles(self):
         style = ttk.Style(self)
-        style.theme_use("clam")
+        # Using a default theme if 'clam' is not available
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            style.theme_use("default")
+        
         # minimal ttk style usage; most UI is custom tk widgets for look control
         self.configure(bg=self.current_theme["bg"])
 
@@ -295,7 +323,7 @@ class AntivirusApp(tk.Tk):
                   command=self.browse_and_scan).pack(pady=12)
 
         self.scan_log = tk.Text(ctrl, width=40, height=12, bg=self.current_theme["panel"],
-                                fg=self.current_theme["fg"], bd=0, padx=8, pady=8)
+                                 fg=self.current_theme["fg"], bd=0, padx=8, pady=8)
         self.scan_log.pack(pady=6)
 
         # quick info
@@ -329,9 +357,9 @@ class AntivirusApp(tk.Tk):
         for name, key in self.available_apps:
             var = tk.BooleanVar(value=False)
             cb = tk.Checkbutton(left, text=name, var=var,
-                                bg=self.current_theme["bg"], fg=self.current_theme["fg"],
-                                selectcolor=self.current_theme["panel"],
-                                font=("Segoe UI", 12))
+                                 bg=self.current_theme["bg"], fg=self.current_theme["fg"],
+                                 selectcolor=self.current_theme["panel"],
+                                 font=("Segoe UI", 12))
             cb.pack(anchor="w", pady=4)
             self.app_vars[key] = (var, name)
 
@@ -424,6 +452,32 @@ class AntivirusApp(tk.Tk):
         self._show_tab("settings")
 
     # ---------------- Operations ----------------
+    def _check_for_malware(self, filepath):
+        """
+        SIMULATION of malware detection logic.
+        Uses the globally defined (but empty) MALWARE_HASHES and MALWARE_EXTENSIONS.
+        """
+        # 1. Check by extension
+        file_ext = os.path.splitext(filepath)[1].lower()
+        if file_ext in MALWARE_EXTENSIONS:
+            return f"Extension Match: {file_ext}"
+
+        # 2. Check by hash (only for files under a certain size for simulation speed)
+        # In a real AV, you'd calculate the file hash (e.g., SHA256) here.
+        if os.path.getsize(filepath) < 5 * 1024 * 1024:  # Simulate hashing for small files (<5MB)
+            try:
+                # Placeholder: If a real hash was calculated, it would be looked up here.
+                # hash_value = self._calculate_sha256(filepath)
+                # if hash_value in MALWARE_HASHES:
+                #     return f"Hash Match: {MALWARE_HASHES[hash_value]}"
+                # For simulation, let's randomly trigger a 'detection'
+                if len(filepath) % 100 == 0: # Small chance of detection based on path length
+                     return "Behavior Match: Suspicious (Simulation)"
+            except Exception:
+                pass # Ignore error if file is inaccessible
+
+        return None # No threat detected
+
     def browse_and_scan(self):
         folder = filedialog.askdirectory()
         if not folder:
@@ -459,23 +513,39 @@ class AntivirusApp(tk.Tk):
                 self.progress_ring.reset_to_idle()
                 return
             self.scan_log.insert(tk.END, f"Found {total} files. Starting scan...\n")
-            self._scan_iter(files, 0, total)
+            self._scan_iter(files, 0, total, 0) # Added threat_count
         wait_collect()
 
-    def _scan_iter(self, files, idx, total):
+    def _scan_iter(self, files, idx, total, threat_count):
         # simulate scanning a single file
         if idx >= total:
-            self.scan_log.insert(tk.END, "Scan complete. No threats detected (simulation).\n")
-            messagebox.showinfo("Scan Complete", "✨ Scan finished successfully!")
+            status_msg = f"Scan complete. Threats found: {threat_count}."
+            self.scan_log.insert(tk.END, status_msg + "\n")
+            if threat_count > 0:
+                messagebox.showerror("Scan Complete", f"⚠️ Scan finished! {threat_count} threats detected!")
+            else:
+                messagebox.showinfo("Scan Complete", "✨ Scan finished successfully! No threats detected.")
             self.progress_ring.reset_to_idle()
             return
+        
         filepath = files[idx]
-        # log step
-        self.scan_log.insert(tk.END, f"Scanning: {os.path.basename(filepath)}\n")
+        threat = self._check_for_malware(filepath) # Check the file
+
+        # Log step
+        log_line = f"Scanning: {os.path.basename(filepath)}"
+        new_threat_count = threat_count
+        if threat:
+            log_line += f" -> 🚨 THREAT DETECTED ({threat})"
+            new_threat_count += 1
+        
+        self.scan_log.insert(tk.END, log_line + "\n")
+        self.scan_log.see(tk.END) # Auto-scroll log
+        
         percent = (idx + 1) / total * 100
         self.progress_ring.update_progress(percent, os.path.basename(filepath))
+        
         # schedule next
-        self.after(8, lambda: self._scan_iter(files, idx + 1, total))
+        self.after(8, lambda: self._scan_iter(files, idx + 1, total, new_threat_count))
 
     def install_selected_apps(self):
         selected = [name for key, (var, name) in self.app_vars.items() if var.get()]
@@ -521,6 +591,7 @@ class AntivirusApp(tk.Tk):
         if messagebox.askyesno("Clear Temp", f"Found ~{count} files in temp. Simulate deletion?"):
             # Simulate deletion progress
             self.maintenance_log.insert(tk.END, f"Simulating removal of {count} temp files...\n")
+            self.progress_ring.stop_radar()
             steps = min(80, count)
             def step(i=0):
                 pct = (i / steps) * 100
@@ -571,25 +642,59 @@ class AntivirusApp(tk.Tk):
         self.configure(bg=self.current_theme["bg"])
         # header/status
         for widget in self.winfo_children():
-            widget.configure(bg=self.current_theme["bg"])
+            # Check if the widget is a frame (like the header or body container)
+            if isinstance(widget, tk.Frame):
+                widget.configure(bg=self.current_theme["bg"])
+                for sub_widget in widget.winfo_children():
+                     # Update all sub-widgets inside the main containers (labels, buttons, etc.)
+                    try:
+                        sub_widget.configure(bg=self.current_theme["bg"])
+                    except tk.TclError:
+                        pass # Ignore widgets that don't have a 'bg' attribute
+
         # progress ring needs recreation to pick up theme cleanly
-        # we will destroy and re-create where it exists (scan tab)
         try:
-            # remove old ring and create new one in same parent
+            # Recreate the progress ring within its parent frame (`mid` in scan tab)
             parent = self.progress_ring.master
             self.progress_ring.destroy()
             self.progress_ring = NeonProgressRing(parent, size=320, thickness=20, theme=self.current_theme)
             self.progress_ring.pack(side="left", padx=40, pady=20)
             self.progress_ring.start_radar()
         except Exception:
-            pass
-        # update small labels and panels: brute-force update of text widgets & buttons
-        for txt in (self.scan_log, self.installer_log, self.maintenance_log):
-            try:
-                txt.configure(bg=self.current_theme["panel"], fg=self.current_theme["fg"])
-            except Exception:
-                pass
+            pass # Fails if tab is not visible or ring hasn't been created yet
+            
+        # Update text widgets and buttons (more specific loop for panels)
+        panels = [
+            self.scan_log, 
+            self.installer_log, 
+            self.maintenance_log, 
+            self.tabs["scan"],
+            self.tabs["installer"],
+            self.tabs["maintenance"],
+            self.tabs["settings"]
+        ]
+
+        for p in panels:
+            if isinstance(p, tk.Text):
+                 p.configure(bg=self.current_theme["panel"], fg=self.current_theme["fg"])
+            elif isinstance(p, tk.Frame):
+                p.configure(bg=self.current_theme["bg"])
+                for w in p.winfo_children():
+                    try:
+                        w.configure(bg=self.current_theme["bg"], fg=self.current_theme["fg"])
+                    except tk.TclError:
+                        pass
+        
+        # Manually update sidebar panel and buttons
+        sidebar = self.content.master.winfo_children()[0]
+        if isinstance(sidebar, tk.Frame):
+            sidebar.configure(bg=self.current_theme["panel"])
+            for b in sidebar.winfo_children():
+                if isinstance(b, tk.Button):
+                    b.configure(bg=self.current_theme["panel"], fg=self.current_theme["accent"])
+
         self.status_label.configure(fg=self.current_theme["muted"])
+
 
     # ---------------- Helpers ----------------
     def log_message(self, msg):
