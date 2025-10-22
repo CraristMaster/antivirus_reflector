@@ -54,7 +54,12 @@ class USBMonitor(threading.Thread):
             if added:
                 for device in added:
                     self.app.log_message(f"USB plugged: {device}")
-                    self.app.scan_directory(device)
+                    # call a safe scan method if implemented
+                    try:
+                        self.app.scan_directory(device)
+                    except AttributeError:
+                        # fallback to logging if scan_directory isn't implemented
+                        self.app.log_message(f"scan_directory not available for device {device}")
             self.existing_devices = new_devices
 
 # ---------------- Antivirus App ----------------
@@ -69,7 +74,7 @@ class AntivirusApp(tk.Tk):
 
         try:
             self.iconphoto(False, tk.PhotoImage(file="/media/kali/reflector/lian/lian.png"))
-        except:
+        except Exception:
             pass
 
         self.grid_rowconfigure(0, weight=1)
@@ -105,6 +110,11 @@ class AntivirusApp(tk.Tk):
 
         self.log_box = None
 
+        # For the Scan Tab widgets - initialized as None; set in add_tab
+        self.scan_log_box = None
+        self.scan_progress_bar_tab = None
+        self.scan_status_label = None
+
         # Tab content frame
         self.tab_content = tk.Frame(self.bottom_frame, bg="black")
         self.tabs = {}
@@ -124,8 +134,11 @@ class AntivirusApp(tk.Tk):
     # Logging helper
     def log_message(self, msg):
         if self.log_box:
-            self.log_box.insert(tk.END, msg + "\n")
-            self.log_box.see(tk.END)
+            self.scan_log_box.insert(tk.END, msg + "\n")
+            self.scan_log_box.see(tk.END)
+        else:
+            # fallback to console if UI log box isn't available yet
+            print(msg)
         self.update_idletasks()
 
     # Auto scan
@@ -137,8 +150,13 @@ class AntivirusApp(tk.Tk):
         self.scan_dir_label.pack(pady=10)
         self.scan_percent_label.pack(pady=5)
 
-        root_path = "C:\\" if platform.system() == "Windows" else "/home"
-        total_files = sum(len(files) for _, _, files in os.walk(root_path))
+        root_path = "C:\" if platform.system() == "Windows" else "/home"
+        total_files = 0
+        try:
+            total_files = sum(len(files) for _, _, files in os.walk(root_path))
+        except Exception as e:
+            self.log_message(f"Failed to walk {root_path}: {e}")
+
         if total_files == 0:
             self.scan_dir_label.config(text="No files found for scanning.")
             self.scan_percent_label.config(text="")
@@ -152,11 +170,8 @@ class AntivirusApp(tk.Tk):
                 scanned += 1
                 percent = int(scanned / total_files * 100)
 
-                # Update UI
-                self.scan_dir_label.config(text=f"Scanning: {root}")
-                self.scan_percent_label.config(text=f"{percent}%")
-                self.progress_var.set(percent)
-                self.update_idletasks()
+                # Update UI - schedule on main thread
+                self.after(0, lambda r=root, p=percent: self._update_scan_ui(r, p))
 
                 filepath = os.path.join(root, file)
                 if "virus" in file.lower():
@@ -165,15 +180,22 @@ class AntivirusApp(tk.Tk):
                 time.sleep(0.002)
 
         if malware_found:
-            messagebox.showwarning("Scan Complete", "⚠ Malware found and deleted.")
+            self.after(0, lambda: messagebox.showwarning("Scan Complete", "⚠ Malware found and deleted."))
         else:
-            messagebox.showinfo("Scan Complete", "✅ No malware found.")
+            self.after(0, lambda: messagebox.showinfo("Scan Complete", "✅ No malware found."))
 
-        # Switch to tabs
+        # Switch to tabs on main thread
+        self.after(0, self._finish_scan)
+
+    def _update_scan_ui(self, root, percent):
+        self.scan_dir_label.config(text=f"Scanning: {root}")
+        self.scan_percent_label.config(text=f"{percent}%")
+        self.progress_var.set(percent)
+        self.update_idletasks()
+
+    def _finish_scan(self):
         self.scan_frame.pack_forget()
         self.init_tabs()
-
-        # Start slow color animation after auto scan
         self.start_lian_animation()
 
     # Initialize tabs
@@ -202,6 +224,16 @@ class AntivirusApp(tk.Tk):
         if name == "Scan":
             self.browse_button = tk.Button(frame, text="Browse & Scan", bg="black", fg="lime", command=self.browse_and_scan)
             self.browse_button.pack(pady=10)
+
+            # --- ADDED: Define missing widgets for scan tab ---
+            self.scan_log_box = tk.Text(frame, height=10, bg="black", fg="lime")
+            self.scan_progress_bar_tab = ttk.Progressbar(frame, maximum=100, variable=self.progress_var, length=400, style="TProgressbar")
+            self.scan_status_label = tk.Label(frame, text="", font=("Arial", 12), bg="black", fg="lime")
+            # Hide them initially
+            # pack_forget will have no effect before first pack, but keep for clarity
+            self.scan_progress_bar_tab.pack_forget()
+            self.scan_status_label.pack_forget()
+            self.scan_log_box.pack_forget()
         else:
             tk.Label(frame, text=f"{name} content coming soon!", bg="black", fg="lime", font=("Arial", 12)).pack(pady=50)
 
@@ -212,15 +244,20 @@ class AntivirusApp(tk.Tk):
 
     def browse_and_scan(self):
         folder_path = filedialog.askdirectory()
-        if folder_path:
+        if folder_path and self.scan_log_box and self.scan_progress_bar_tab and self.scan_status_label:
             self.scan_log_box.delete(1.0, tk.END)
             self.scan_progress_bar_tab.pack(pady=10)
             self.scan_status_label.pack(pady=5)
             self.scan_log_box.pack(pady=10)
             self.scan_status_label.config(text=f"Scanning: {folder_path}")
 
-# ---------------- Main Run ----------------
-if __name__ == "__main__":
+    # Optional: implement a safe scan_directory method if USBMonitor expects it
+    def scan_directory(self, device_path):
+        # Basic implementation: log that a scan would be performed
+        self.log_message(f"Scanning directory: {device_path}")
+        # Expand with actual scanning logic as needed
+
+# ---------------- Main Run ----------------nif __name__ == "__main__":
     root = AntivirusApp()
     splash = SplashScreen(root, "/media/ubuntu-studio/JOKER/I.png", 5000)
     root.withdraw()
