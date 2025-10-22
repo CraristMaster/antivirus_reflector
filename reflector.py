@@ -88,6 +88,10 @@ class AntivirusApp(tk.Tk):
         self.scan_title = tk.Label(self.top_frame, text="Lian", font=("Arial", 22, "bold"), bg='black', fg="lime")
         self.scan_title.pack(expand=True)
 
+        # CPU status label (usage & temperature)
+        self.cpu_status_label = tk.Label(self.top_frame, text="CPU: --% | Temp: N/A", font=("Arial", 10), bg='black', fg='orange')
+        self.cpu_status_label.pack()
+
         # Separation line
         self.separator = tk.Frame(self.top_frame, bg="lime", height=2)
         self.separator.pack(fill="x", pady=5)
@@ -120,6 +124,9 @@ class AntivirusApp(tk.Tk):
         self.tabs = {}
         self.tab_buttons_frame = None
 
+        # Start updating CPU status
+        self.update_cpu_status()
+
     # ----------------- Lian Color Animation -----------------
     def start_lian_animation(self):
         self.lian_colors = ["lime", "orange", "cyan", "magenta", "yellow", "red"]
@@ -130,6 +137,40 @@ class AntivirusApp(tk.Tk):
         self.scan_title.config(fg=self.lian_colors[self.lian_color_index])
         self.lian_color_index = (self.lian_color_index + 1) % len(self.lian_colors)
         self.after(800, self.animate_lian_color_slow)
+
+    # CPU status updater
+    def update_cpu_status(self):
+        # Update CPU percent
+        try:
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+        except Exception:
+            cpu_percent = None
+
+        # Update temperature if available
+        temp_str = "N/A"
+        try:
+            temps = psutil.sensors_temperatures()
+            if temps:
+                # Find any available temperature sensor
+                all_temps = []
+                for name, entries in temps.items():
+                    for entry in entries:
+                        if entry.current is not None:
+                            all_temps.append(entry.current)
+                if all_temps:
+                    avg_temp = sum(all_temps) / len(all_temps)
+                    temp_str = f"{avg_temp:.1f}°C"
+        except Exception:
+            temp_str = "N/A"
+
+        cpu_text = f"CPU: {cpu_percent if cpu_percent is not None else '--'}% | Temp: {temp_str}"
+        try:
+            self.cpu_status_label.config(text=cpu_text)
+        except Exception:
+            pass
+
+        # schedule next update
+        self.after(2000, self.update_cpu_status)
 
     # Logging helper
     def log_message(self, msg):
@@ -257,7 +298,8 @@ class AntivirusApp(tk.Tk):
         self.log_message(f"Scanning directory: {device_path}")
         # Expand with actual scanning logic as needed
 
-# ---------------- Main Run ----------------nif __name__ == "__main__":
+# ---------------- Main Run ----------------
+if __name__ == "__main__":
     root = AntivirusApp()
     splash = SplashScreen(root, "/media/ubuntu-studio/JOKER/I.png", 5000)
     root.withdraw()
